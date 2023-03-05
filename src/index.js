@@ -15,7 +15,7 @@ const STREAM_HEADERS = {
   'Connection': 'keep-alive',
 };
 
-const ALLOWED_DOMAINS = ['*.llego.dev'];
+const ALLOWED_DOMAINS = ['llego.dev'];
 
 // Define an async function that hashes a string with SHA-256
 const sha256 = async (message) => {
@@ -69,11 +69,9 @@ const handleRequest = async (request, env) => {
     }
 
     // Check if the request is coming from an allowed domain
-    const referer = request.headers.get('Referer');
-    const domainMatch = referer.match(/^https?:\/\/([^/?#]+)(?:[/?#]|$)/i);
-    const domain = domainMatch && domainMatch[1];
-    if (domain == null || !ALLOWED_DOMAINS.some((allowed) => domain.endsWith(allowed.substring(1)))) {
-      return new Response('Forbidden', { status: 403, headers: CORS_HEADERS });
+    const origin = request.headers.get('Origin');
+    if (origin == null || !ALLOWED_DOMAINS.some((allowed) => origin.endsWith(allowed))) {
+      return new Response('Origin Not Allowed', { status: 403, headers: CORS_HEADERS });
     }
 
     // Enforce the rate limit based on hashed client IP address
