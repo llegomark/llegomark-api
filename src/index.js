@@ -38,27 +38,28 @@ const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const hashIp = (ip, utcNow, secret_key) => sha256(`${utcNow.format('ddd=DD.MM-HH+YYYY')}-${ip}:${secret_key}`);
 
 const handleRequest = async (request, env) => {
-  let requestBody;
   try {
-    requestBody = await request.json();
-  } catch (error) {
-    return new Response('Malformed JSON', { status: 422, headers: CORS_HEADERS });
-  }
+    // Code for handling request
+    let requestBody;
+    try {
+      requestBody = await request.json();
+    } catch (error) {
+      return new Response('Malformed JSON', { status: 422, headers: CORS_HEADERS });
+    }
 
-  const { stream } = requestBody;
-  if (stream != null && stream !== true && stream !== false) {
-    return new Response('The `stream` parameter must be a boolean value', { status: 400, headers: CORS_HEADERS });
-  }
+    const { stream } = requestBody;
+    if (stream != null && stream !== true && stream !== false) {
+      return new Response('The `stream` parameter must be a boolean value', { status: 400, headers: CORS_HEADERS });
+    }
 
-  // Check if the request is coming from an allowed domain
-  const referer = request.headers.get('Referer');
-  const domainMatch = referer.match(/^https?:\/\/([^/?#]+)(?:[/?#]|$)/i);
-  const domain = domainMatch && domainMatch[1];
-  if (domain == null || !ALLOWED_DOMAINS.some((allowed) => domain.endsWith(allowed.substring(1)))) {
-    return new Response('Forbidden', { status: 403, headers: CORS_HEADERS });
-  }
+    // Check if the request is coming from an allowed domain
+    const referer = request.headers.get('Referer');
+    const domainMatch = referer.match(/^https?:\/\/([^/?#]+)(?:[/?#]|$)/i);
+    const domain = domainMatch && domainMatch[1];
+    if (domain == null || !ALLOWED_DOMAINS.some((allowed) => domain.endsWith(allowed.substring(1)))) {
+      return new Response('Forbidden', { status: 403, headers: CORS_HEADERS });
+    }
 
-  try {
     // Enforce the rate limit based on hashed client IP address
     const utcNow = moment.utc();
     const clientIp = request.headers.get('CF-Connecting-IP');
@@ -104,7 +105,24 @@ const handleRequest = async (request, env) => {
       },
     });
   } catch (error) {
-    return new Response(error.message, { status: 500, headers: CORS_HEADERS });
+    console.error(error);
+
+    let message = 'Internal Server Error';
+    let status = 500;
+
+    if (error instanceof Response) {
+      // If error is coming from upstream API, reflect it back to the client
+      message = await error.text();
+      status = error.status;
+
+      console.error(`Upstream API responded with:\n\n${message}`);
+    } else if (error instanceof TypeError) {
+      // If error is caused by a programming error like incorrect arguments, etc.
+      message = error.message;
+      status = 400;
+    }
+
+    return new Response(message, { status, headers: CORS_HEADERS });
   }
 };
 
