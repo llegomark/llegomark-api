@@ -15,7 +15,7 @@ const STREAM_HEADERS = {
   'Connection': 'keep-alive',
 };
 
-const ALLOWED_DOMAINS = ['llego.dev'];
+const ALLOWED_DOMAINS = ['*.llego.dev'];
 
 // Define an async function that hashes a string with SHA-256
 const sha256 = async (message) => {
