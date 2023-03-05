@@ -1,6 +1,7 @@
 import moment from 'moment';
 
 const UPSTREAM_URL = 'https://api.openai.com/v1/chat/completions';
+const ORG_ID_REGEX = /\borg-[a-zA-Z0-9]{24}\b/g; // used to obfuscate any org IDs in the response text
 const MAX_REQUESTS = 1024; // maximum number of requests per IP address per hour
 
 const CORS_HEADERS = {
@@ -13,6 +14,8 @@ const STREAM_HEADERS = {
   'Content-Type': 'text/event-stream',
   'Connection': 'keep-alive',
 };
+
+const ALLOWED_DOMAINS = ['llego.dev'];
 
 // Define an async function that hashes a string with SHA-256
 const sha256 = async (message) => {
@@ -39,12 +42,18 @@ const handleRequest = async (request, env) => {
   try {
     requestBody = await request.json();
   } catch (error) {
-    return new Response('Malformed JSON', { status: 422, header: CORS_HEADERS });
+    return new Response('Malformed JSON', { status: 422, headers: CORS_HEADERS });
   }
 
   const { stream } = requestBody;
   if (stream != null && stream !== true && stream !== false) {
-    return new Response('The `stream` parameter must be a boolean value', { status: 400, header: CORS_HEADERS });
+    return new Response('The `stream` parameter must be a boolean value', { status: 400, headers: CORS_HEADERS });
+  }
+
+  // Check if the request is coming from an allowed domain
+  const referer = request.headers.get('Referer');
+  if (ALLOWED_DOMAINS.indexOf(new URL(referer).hostname) === -1) {
+    return new Response('Forbidden', { status: 403, headers: CORS_HEADERS });
   }
 
   try {
@@ -56,7 +65,7 @@ const handleRequest = async (request, env) => {
     const rateLimitData = (await env.kv.get(rateLimitKey, { type: 'json' })) || {};
     const { rateLimitCount = 0, rateLimitExpiration = utcNow.startOf('hour').add(1, 'hour').unix() } = rateLimitData;
     if (rateLimitCount > MAX_REQUESTS) {
-      return new Response('Too many requests', { status: 429, header: CORS_HEADERS });
+      return new Response('Too many requests please try again later', { status: 429, headers: CORS_HEADERS });
     }
 
     // Forward a POST request to the upstream URL and return the response
@@ -74,7 +83,8 @@ const handleRequest = async (request, env) => {
     if (!upstreamResponse.ok) {
       const { status } = upstreamResponse;
       const text = await upstreamResponse.text();
-      return new Response(`OpenAI API responded with:\n\n${text}`, { status, header: CORS_HEADERS });
+      const textObfuscated = text.replace(ORG_ID_REGEX, 'org-************************');
+      return new Response(`OpenAI API responded with:\n\n${textObfuscated}`, { status, header: CORS_HEADERS });
     }
 
     // Update the rate limit information
@@ -100,7 +110,7 @@ export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
     if (pathname !== '/v1/') {
-      return new Response('Not found', { status: 404, headers: CORS_HEADERS });
+      return new Response('Not Found', { status: 404, headers: CORS_HEADERS });
     }
 
     if (request.method === 'OPTIONS') {
@@ -113,7 +123,7 @@ export default {
     }
 
     if (request.method !== 'POST') {
-      return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS });
+      return new Response('Method Not Allowed', { status: 405, headers: CORS_HEADERS });
     }
 
     const contentType = request.headers.get('Content-Type');
