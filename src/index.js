@@ -21,11 +21,18 @@ const ALLOWED_DOMAINS = ['*.llego.dev'];
 const sha256 = async (message) => {
   const data = new TextEncoder().encode(message);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(hashBuffer)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 };
 
-const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const randomChoice = (arr) => {
+  if (arr.length === 0) {
+    throw new Error('Cannot get a random choice from an empty array');
+  }
+  const randomIndex = Math.floor(Math.random() * arr.length);
+  return arr[randomIndex];
+};
 
 // Define an async function that hashes user IP address, UTC year, month, day, day of the week, hour and the secret key
 //
@@ -35,7 +42,16 @@ const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
 // the user's IP address but is also unique to each hour, making the user's IP address hard to be determined. Moreover, the
 // one-way nature of the SHA-256 algorithm implies that even if the digest value is compromised, it is almost impossible to
 // reverse it to obtain the original IP address, ensuring the privacy and security of the user's identity.
-const hashIp = (ip, utcNow, secret_key) => sha256(`${utcNow.format('ddd=DD.MM-HH+YYYY')}-${ip}:${secret_key}`);
+const hashIp = async (ip, utcNow, secret_key) => {
+  const message = `${utcNow.format('ddd=DD.MM-HH+YYYY')}-${ip}:${secret_key}`;
+  try {
+    const hash = await sha256(message);
+    return hash;
+  } catch (error) {
+    console.error(`Error hashing message: ${message}`, error);
+    throw new Error('Error hashing IP address');
+  }
+};
 
 const handleRequest = async (request, env) => {
   try {
