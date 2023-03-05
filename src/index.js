@@ -17,18 +17,15 @@ const STREAM_HEADERS = {
 
 const ALLOWED_DOMAINS = ['*.llego.dev'];
 
-const API_KEYS = JSON.parse(env.API_KEYS);
-
-// Define a function that hashes a string with SHA-256 and a salt value
-const sha256 = async (message, salt) => {
-  const data = new TextEncoder().encode(`${message}${salt}`);
+// Define an async function that hashes a string with SHA-256
+const sha256 = async (message) => {
+  const data = new TextEncoder().encode(message);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer))
+  return Array.from(hashBuffer)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 };
 
-// Define a function to select an API key randomly from a list
 const randomChoice = (arr) => {
   if (arr.length === 0) {
     throw new Error('Cannot get a random choice from an empty array');
@@ -37,7 +34,7 @@ const randomChoice = (arr) => {
   return arr[randomIndex];
 };
 
-// Define a function that hashes user IP address, UTC year, month, day, day of the week, hour, and the secret key
+// Define an async function that hashes user IP address, UTC year, month, day, day of the week, hour and the secret key
 //
 // To implement IP-based rate limiting, we have to store users' IP addresses in a certain way. However, we want to protect
 // users' privacy as much as possible. To achieve this, we use SHA-256 to calculate a digest value of the user's IP address
@@ -46,11 +43,10 @@ const randomChoice = (arr) => {
 // one-way nature of the SHA-256 algorithm implies that even if the digest value is compromised, it is almost impossible to
 // reverse it to obtain the original IP address, ensuring the privacy and security of the user's identity.
 const hashIp = async (ip, utcNow, secret_key) => {
-  const salt = crypto.getRandomValues(new Uint8Array(16)).join('');
   const message = `${utcNow.format('ddd=DD.MM-HH+YYYY')}-${ip}:${secret_key}`;
   try {
-    const hash = await sha256(message, salt);
-    return { hash, salt };
+    const hash = await sha256(message);
+    return hash;
   } catch (error) {
     console.error(`Error hashing message: ${message}`, error);
     throw new Error('Error hashing IP address');
@@ -67,21 +63,23 @@ const handleRequest = async (request, env) => {
       return new Response('Malformed JSON', { status: 422, headers: CORS_HEADERS });
     }
 
-    const stream = requestBody.stream === true;
-    if (requestBody.stream != null && !stream) {
+    const { stream } = requestBody;
+    if (stream != null && stream !== true && stream !== false) {
       return new Response('The `stream` parameter must be a boolean value', { status: 400, headers: CORS_HEADERS });
     }
 
     // Check if the request is coming from an allowed domain
-    const domain = new URL(request.referrer).host;
-    if (!ALLOWED_DOMAINS.some((allowed) => domain.endsWith(allowed.substring(1)))) {
+    const referer = request.headers.get('Referer');
+    const domainMatch = referer.match(/^https?:\/\/([^/?#]+)(?:[/?#]|$)/i);
+    const domain = domainMatch && domainMatch[1];
+    if (domain == null || !ALLOWED_DOMAINS.some((allowed) => domain.endsWith(allowed.substring(1)))) {
       return new Response('Forbidden', { status: 403, headers: CORS_HEADERS });
     }
 
     // Enforce the rate limit based on hashed client IP address
     const utcNow = moment.utc();
     const clientIp = request.headers.get('CF-Connecting-IP');
-    const { hash: clientIpHash, salt: clientIpSalt } = await hashIp(clientIp, utcNow, env.SECRET_KEY);
+    const clientIpHash = await hashIp(clientIp, utcNow, env.SECRET_KEY);
     const rateLimitKey = `rate_limit_${clientIpHash}`;
     const rateLimitData = (await env.kv.get(rateLimitKey, { type: 'json' })) || {};
     const { rateLimitCount = 0, rateLimitExpiration = utcNow.startOf('hour').add(1, 'hour').unix() } = rateLimitData;
@@ -90,7 +88,7 @@ const handleRequest = async (request, env) => {
     }
 
     // Forward a POST request to the upstream URL and return the response
-    const api_key = randomChoice(API_KEYS);
+    const api_key = randomChoice(JSON.parse(env.API_KEYS));
     const upstreamResponse = await fetch(UPSTREAM_URL, {
       method: 'POST',
       headers: {
@@ -168,6 +166,6 @@ export default {
       return new Response("Unsupported media type. Use 'application/json' content type", { status: 415, headers: CORS_HEADERS });
     }
 
-    return await handleRequest(request, env);
+    return handleRequest(request, env);
   },
 };
