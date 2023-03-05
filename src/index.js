@@ -52,7 +52,9 @@ const handleRequest = async (request, env) => {
 
   // Check if the request is coming from an allowed domain
   const referer = request.headers.get('Referer');
-  if (ALLOWED_DOMAINS.indexOf(new URL(referer).hostname) === -1) {
+  const domainMatch = referer.match(/^https?:\/\/([^/?#]+)(?:[/?#]|$)/i);
+  const domain = domainMatch && domainMatch[1];
+  if (domain == null || !ALLOWED_DOMAINS.some((allowed) => domain.endsWith(allowed.substring(1)))) {
     return new Response('Forbidden', { status: 403, headers: CORS_HEADERS });
   }
 
@@ -112,7 +114,6 @@ export default {
     if (pathname !== '/v1/') {
       return new Response('Not Found', { status: 404, headers: CORS_HEADERS });
     }
-
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
