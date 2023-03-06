@@ -63,7 +63,7 @@ const getIpHash = async (request, env) => {
 const handleRequest = async (request, env) => {
   try {
     // Code for handling request
-    let requestBody;
+    let requestBody = null;
     try {
       requestBody = await request.json();
     } catch (error) {
@@ -107,7 +107,7 @@ const handleRequest = async (request, env) => {
       const { status } = upstreamResponse;
       const text = await upstreamResponse.text();
       const obfuscatedText = text.replace(ORG_ID_REGEX, 'org-************************');
-      return new Response(`OpenAI API responded with:\n\n${obfuscatedText}`, { status, header: CORS_HEADERS });      
+      return new Response(`OpenAI API responded with:\n\n${obfuscatedText}`, { status, header: CORS_HEADERS });
     }
 
     // Update the rate limit information
@@ -170,6 +170,6 @@ export default {
       return new Response("Unsupported media type. Use 'application/json' content type", { status: 415, headers: CORS_HEADERS });
     }
 
-    return handleRequest(request, env);
+    return await handleRequest(request, env);
   },
 };
