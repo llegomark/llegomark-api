@@ -2,12 +2,13 @@ import moment from 'moment';
 
 const UPSTREAM_URL = 'https://api.openai.com/v1/chat/completions';
 const ORG_ID_REGEX = /\borg-[a-zA-Z0-9]{24}\b/g; // used to obfuscate any org IDs in the response text
-const MAX_REQUESTS = 1024; // maximum number of requests per IP address per hour
+const MAX_REQUESTS = 100; // maximum number of requests per IP address per hour
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS, BREW',
+  'Access-Control-Allow-Origin': '', // add your domain here
+  'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Vary': 'Origin', // add vary header to inform clients that CORS is enabled.
 };
 
 const STREAM_HEADERS = {
@@ -88,7 +89,7 @@ const handleRequest = async (request, env) => {
     const rateLimitData = (await env.kv.get(rateLimitKey, { type: 'json' })) || {};
     const { rateLimitCount = 0, rateLimitExpiration = utcNow.startOf('hour').add(1, 'hour').unix() } = rateLimitData;
     if (rateLimitCount > MAX_REQUESTS) {
-      return new Response('Too many requests please try again later', { status: 429, headers: CORS_HEADERS });
+      return new Response('Please try again in an hour as we have received an excessive amount of requests.', { status: 429, headers: CORS_HEADERS });
     }
 
     // Forward a POST request to the upstream URL and return the response
