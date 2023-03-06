@@ -35,7 +35,6 @@ const randomChoice = (arr) => {
 };
 
 // Define an async function that hashes user IP address, UTC year, month, day, day of the week, hour and the secret key
-//
 // To implement IP-based rate limiting, we have to store users' IP addresses in a certain way. However, we want to protect
 // users' privacy as much as possible. To achieve this, we use SHA-256 to calculate a digest value of the user's IP address
 // along with the UTC year, month, day, day of the week, hour, and the secret key. The resulting digest not only depends on
@@ -51,6 +50,14 @@ const hashIp = async (ip, utcNow, secret_key) => {
     console.error(`Error hashing message: ${message}`, error);
     throw new Error('Error hashing IP address');
   }
+};
+
+// Define a separate utility function that calls sha256 to hash User's IP and the current date and time.
+const getIpHash = async (request, env) => {
+  const utcNow = moment.utc();
+  const clientIp = request.headers.get('CF-Connecting-IP');
+  const clientIpHash = await hashIp(clientIp, utcNow, env.SECRET_KEY);
+  return clientIpHash;
 };
 
 const handleRequest = async (request, env) => {
@@ -76,8 +83,7 @@ const handleRequest = async (request, env) => {
 
     // Enforce the rate limit based on hashed client IP address
     const utcNow = moment.utc();
-    const clientIp = request.headers.get('CF-Connecting-IP');
-    const clientIpHash = await hashIp(clientIp, utcNow, env.SECRET_KEY);
+    const clientIpHash = await getIpHash(request, env);
     const rateLimitKey = `rate_limit_${clientIpHash}`;
     const rateLimitData = (await env.kv.get(rateLimitKey, { type: 'json' })) || {};
     const { rateLimitCount = 0, rateLimitExpiration = utcNow.startOf('hour').add(1, 'hour').unix() } = rateLimitData;
