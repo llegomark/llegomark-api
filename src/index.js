@@ -106,8 +106,8 @@ const handleRequest = async (request, env) => {
     if (!upstreamResponse.ok) {
       const { status } = upstreamResponse;
       const text = await upstreamResponse.text();
-      const textObfuscated = text.replace(ORG_ID_REGEX, 'org-************************');
-      return new Response(`OpenAI API responded with:\n\n${textObfuscated}`, { status, header: CORS_HEADERS });
+      const obfuscatedText = text.replace(ORG_ID_REGEX, 'org-************************');
+      return new Response(`OpenAI API responded with:\n\n${obfuscatedText}`, { status, header: CORS_HEADERS });      
     }
 
     // Update the rate limit information
