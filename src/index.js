@@ -87,7 +87,10 @@ const handleRequest = async (request, env) => {
     const clientIpHash = await getIpHash(request, env);
     const rateLimitKey = `rate_limit_${clientIpHash}`;
     const rateLimitData = (await env.kv.get(rateLimitKey, { type: 'json' })) || {};
-    const { rateLimitCount = 0, rateLimitExpiration = utcNow.startOf('hour').add(1, 'hour').unix() } = rateLimitData;
+    const { rateLimitCount = 0, rateLimitExpiration: oldRateLimitExpiration } = rateLimitData;
+    const newRateLimitExpiration = utcNow.hour() === moment.unix(oldRateLimitExpiration).hour() ? moment.unix(oldRateLimitExpiration).add(1, 'hour').unix() : utcNow.startOf('hour').add(1, 'hour').unix();
+    const rateLimitExpiration = newRateLimitExpiration;
+
     if (rateLimitCount > MAX_REQUESTS) {
       return new Response('Please try again in an hour as we have received an excessive amount of requests.', { status: 429, headers: CORS_HEADERS });
     }
